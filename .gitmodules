@@ -1,0 +1,3 @@
+[submodule "m24c0x"]
+	path = m24c0x
+	url = git@github.com:martabel/m24c0x.git

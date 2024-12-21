@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>PrintBot WLAN configuration</title>
+  </head>
+  <body>
+    <main>
+        <h1>PrintBot WLAN configuration</h1>
+        <h2>Actual Configuration</h2>
+        <p>WLAN SSID: %s</p>
+        <h2>Set new WLAN</h2>
+        <form action="pb-set-wifi" method="post">
+            <label for="ssid">WLAN SSID:</label>
+            <input type="text" id="ssid" name="ssid"><br><br>
+            <label for="password">Password:</label>
+            <input type="text" id="password" name="password"><br><br>
+            <input type="submit" value="Save & Connect">
+        </form> 
+    </main>
+  </body>
+</html>
