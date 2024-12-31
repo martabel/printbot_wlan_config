@@ -28,7 +28,7 @@ extern "C" {
 #define LED_GREEN_GPIO 12
 #define HTTP_RESPONSE_REDIRECT "HTTP/1.1 302 Redirect\nLocation: http://%s" LED_TEST "\n\n"
 
-#define WLAN_CRED_BUFFER_SIZE 15
+#define WLAN_CRED_BUFFER_SIZE 50
 #define WLAN_CRED_SAVED_FLAG 0xA5
 #define WLAN_SSID_DEFAULT "DEFAULT_SSID"
 #define WLAN_PASSWORD_DEFAULT "DEFAULT_PW"
@@ -66,22 +66,22 @@ static M24C0x eeprom(I2C_PORT, I2C_ADDR, I2C_SDA, I2C_SCL, WC_PIN);
 
 void save_wlan_config_to_eeprom()
 {
-    printf("save credentilas to eeprom");
+    printf("save credentilas to eeprom\nssid: %s pw: %s\n", wifi_ssid, wifi_password);
     eeprom.write_bytes(0, (uint8_t*)wifi_ssid, WLAN_CRED_BUFFER_SIZE);
     eeprom.write_bytes(WLAN_CRED_BUFFER_SIZE, (uint8_t*)wifi_password, WLAN_CRED_BUFFER_SIZE);
     uint8_t savedFlag[1] = {WLAN_CRED_SAVED_FLAG};
     eeprom.write_bytes(2*WLAN_CRED_BUFFER_SIZE, savedFlag, 1);
-    printf("save credentilas to eeprom, done");
+    printf("save credentilas to eeprom, done\n");
 }
 
 bool load_wlan_config_from_eeprom()
 {
-    printf("read credentilas from eeprom");
+    printf("read credentilas from eeprom\n");
     eeprom.read_bytes(0, (uint8_t*)wifi_ssid, WLAN_CRED_BUFFER_SIZE);
     eeprom.read_bytes(WLAN_CRED_BUFFER_SIZE, (uint8_t*)wifi_password, WLAN_CRED_BUFFER_SIZE);
     uint8_t savedFlag[1] = {0};
     eeprom.read_bytes(2*WLAN_CRED_BUFFER_SIZE, savedFlag, 1);
-    printf("read credentilas from eeprom, done");
+    printf("ssid: %s pw: %s flag: 0x%X\n", wifi_ssid, wifi_password, savedFlag[0]);
     if(savedFlag[0] == WLAN_CRED_SAVED_FLAG) {
         return true;
     }else{
@@ -395,12 +395,14 @@ static bool tcp_server_open(void *arg, const char *ap_name) {
     tcp_arg(state->server_pcb, state);
     tcp_accept(state->server_pcb, tcp_server_accept);
 
-    printf("Try connecting to '%s' (press 'd' to disable access point)\n", ap_name);
     return true;
 }
 
 int main() {
+
     stdio_init_all();
+
+    sleep_ms(4000);
 
     eeprom.init();
 
@@ -470,33 +472,35 @@ int main() {
             }
             if (wifi_is_saved)
             {
-                printf("Try to connect to saved wlan settings");
+                printf("Try to connect to saved wlan settings\n");
                 wifi_is_saved = false;
 
                 // all led on, for waiting
                 gpio_put(LED_GREEN_GPIO, 1);
                 gpio_put(LED_RED_GPIO, 1);
 
+                sleep_ms(500);
+
                 cyw43_arch_disable_ap_mode();
 
-                sleep_ms(50);
+                sleep_ms(500);
 
                 cyw43_arch_enable_sta_mode();
 
-                if (cyw43_arch_wifi_connect_timeout_ms(wifi_ssid, wifi_password, CYW43_AUTH_WPA2_AES_PSK, 10000)) {
-                    printf("connection to wifi not ok");
+                if (cyw43_arch_wifi_connect_timeout_ms(wifi_ssid, wifi_password, CYW43_AUTH_WPA2_AES_PSK, 15000)) {
+                    printf("connection to wifi not ok\n");
                     // connection to wifi not ok
                     gpio_put(LED_GREEN_GPIO, 0);
                     gpio_put(LED_RED_GPIO, 1);
                     // go again to ap mode
                     cyw43_arch_disable_sta_mode();
-                    sleep_ms(50);
+                    sleep_ms(500);
                     cyw43_arch_enable_ap_mode(WLAN_AP_SSID, WLAN_AP_PASSWORD, CYW43_AUTH_WPA2_AES_PSK);
                     
                 }
                 else
                 {
-                    printf("connection to wifi ok");
+                    printf("connection to wifi ok\n");
                     // connection to wifi ok
                     gpio_put(LED_GREEN_GPIO, 1);
                     gpio_put(LED_RED_GPIO, 0);
@@ -505,7 +509,7 @@ int main() {
                     save_wlan_config_to_eeprom();
                 }
             }
-            sleep_ms(50);
+            sleep_ms(1);
         }
     }
     tcp_server_close(state);
