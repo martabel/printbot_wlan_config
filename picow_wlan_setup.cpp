@@ -14,19 +14,12 @@ extern "C" {
 #include "m24c0x/src/m24c0x.hpp"
 
 #define TCP_PORT 80
-#define POLL_TIME_S 5
 #define HTTP_GET "GET"
 #define HTTP_POST "POST /pb-set-wifi"
 #define HTTP_RESPONSE_HEADERS "HTTP/1.1 %d OK\nContent-Length: %d\nContent-Type: text/html; charset=utf-8\nConnection: close\n\n"
-#define LED_TEST_BODY "<html><body><h1>Hello from Pico W.</h1><p>Led is %s</p><p><a href=\"?led=%d\">Turn led %s</a></body></html>"
 #define HTML_BODY "<!doctypehtml><html lang=en><meta charset=UTF-8><meta content=\"width=device-width,initial-scale=1\"name=viewport><meta content=\"ie=edge\"http-equiv=X-UA-Compatible><title>PrintBot WLAN configuration</title><main><h1>PrintBot WLAN configuration</h1><h2>Actual Configuration</h2><p>WLAN SSID: %s<h2>Set new WLAN</h2><form action=\"pb-set-wifi\" method=\"post\"><label for=ssid>WLAN SSID:</label> <input id=ssid name=ssid><br><br><label for=password>Password:</label> <input id=password name=password><br><br><input type=submit value=\"Save & Connect\"></form></main>"
 #define HTML_RESULT_BODY "<!doctypehtml><html lang=en><meta charset=UTF-8><meta content=\"width=device-width,initial-scale=1\"name=viewport><meta content=\"ie=edge\"http-equiv=X-UA-Compatible><title>PrintBot WLAN configuration</title><main><h1>New WLAN configuration saved. The system restart automaticlly</h1></main>"
-#define LED_PARAM "led=%d"
-#define LED_TEST "/ledtest"
 #define BTN_GPIO 14
-#define LED_RED_GPIO 13
-#define LED_GREEN_GPIO 12
-#define HTTP_RESPONSE_REDIRECT "HTTP/1.1 302 Redirect\nLocation: http://%s" LED_TEST "\n\n"
 
 #define WLAN_CRED_BUFFER_SIZE 50
 #define WLAN_CRED_SAVED_FLAG 0xA5
@@ -66,27 +59,52 @@ static M24C0x eeprom(I2C_PORT, I2C_ADDR, I2C_SDA, I2C_SCL, WC_PIN);
 
 void save_wlan_config_to_eeprom()
 {
-    printf("save credentilas to eeprom\nssid: %s pw: %s\n", wifi_ssid, wifi_password);
+    printf("save credentials to eeprom\nssid: %s pw: %s\n", wifi_ssid, wifi_password);
     eeprom.write_bytes(0, (uint8_t*)wifi_ssid, WLAN_CRED_BUFFER_SIZE);
     eeprom.write_bytes(WLAN_CRED_BUFFER_SIZE, (uint8_t*)wifi_password, WLAN_CRED_BUFFER_SIZE);
     uint8_t savedFlag[1] = {WLAN_CRED_SAVED_FLAG};
     eeprom.write_bytes(2*WLAN_CRED_BUFFER_SIZE, savedFlag, 1);
-    printf("save credentilas to eeprom, done\n");
+    printf("save credentials to eeprom, done\n");
 }
 
 bool load_wlan_config_from_eeprom()
 {
-    printf("read credentilas from eeprom\n");
+    printf("read credentials from eeprom\n");
     eeprom.read_bytes(0, (uint8_t*)wifi_ssid, WLAN_CRED_BUFFER_SIZE);
     eeprom.read_bytes(WLAN_CRED_BUFFER_SIZE, (uint8_t*)wifi_password, WLAN_CRED_BUFFER_SIZE);
     uint8_t savedFlag[1] = {0};
     eeprom.read_bytes(2*WLAN_CRED_BUFFER_SIZE, savedFlag, 1);
     printf("ssid: %s pw: %s flag: 0x%X\n", wifi_ssid, wifi_password, savedFlag[0]);
     if(savedFlag[0] == WLAN_CRED_SAVED_FLAG) {
+        printf("Read credentials from eeprom successfully\n");
         return true;
     }else{
+        printf("No valid credentials in eeprom found\n");
         return false;
     }
+}
+
+void clear_wlan_config_from_eeprom()
+{
+    printf("Clearing WLAN credentials from EEPROM\n");
+    
+    // Leere Arrays zum Überschreiben der Daten
+    uint8_t empty_data[WLAN_CRED_BUFFER_SIZE];
+    memset(empty_data, 0, WLAN_CRED_BUFFER_SIZE);
+    
+    // SSID und Passwort im EEPROM mit leeren Bytes überschreiben
+    eeprom.write_bytes(0, empty_data, WLAN_CRED_BUFFER_SIZE);
+    eeprom.write_bytes(WLAN_CRED_BUFFER_SIZE, empty_data, WLAN_CRED_BUFFER_SIZE);
+    
+    // Flag auf 0 setzen, damit beim nächsten Einlesen die Credentials als ungültig erkannt werden
+    uint8_t clearedFlag[1] = {0};
+    eeprom.write_bytes(2*WLAN_CRED_BUFFER_SIZE, clearedFlag, 1);
+    
+    // Lokale Variablen zurücksetzen
+    memset(wifi_ssid, 0, WLAN_CRED_BUFFER_SIZE);
+    memset(wifi_password, 0, WLAN_CRED_BUFFER_SIZE);
+    
+    printf("WLAN credentials successfully cleared\n");
 }
 
 int url_decode(char* out, const char* in)
@@ -167,37 +185,6 @@ static err_t tcp_server_sent(void *arg, struct tcp_pcb *pcb, u16_t len) {
     return ERR_OK;
 }
 
-static int test_server_content(const char *request, const char *params, char *result, size_t max_result_len) {
-    int len = 0;
-    if (strncmp(request, LED_TEST, sizeof(LED_TEST) - 1) == 0) {
-        // Get the state of the led
-        bool value;
-        cyw43_gpio_get(&cyw43_state, LED_GREEN_GPIO, &value);
-        int led_state = value;
-
-        // See if the user changed it
-        if (params) {
-            int led_param = sscanf(params, LED_PARAM, &led_state);
-            if (led_param == 1) {
-                if (led_state) {
-                    // Turn led on
-                    cyw43_gpio_set(&cyw43_state, 0, true);
-                } else {
-                    // Turn led off
-                    cyw43_gpio_set(&cyw43_state, 0, false);
-                }
-            }
-        }
-        // Generate result
-        if (led_state) {
-            len = snprintf(result, max_result_len, LED_TEST_BODY, "ON", 0, "OFF");
-        } else {
-            len = snprintf(result, max_result_len, LED_TEST_BODY, "OFF", 1, "ON");
-        }
-    }
-    return len;
-}
-
 static int wlan_config_server_content(const char *request, const char *params, char *result, size_t max_result_len) {
     int len = 0;
     len = snprintf(result, max_result_len, HTML_BODY, wifi_ssid);
@@ -233,7 +220,9 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
                 payload[p_body_length] = 0;
 
                 printf("POST body ", p_body);
+                printf("\n");
                 printf("POST body length ", p_body_length);
+                printf("\n");
 
                 // Scan the query string
                 sscanf(payload, "\r\n\r\nssid=%50[^&]&password=%50[^&]", wifi_ssid_tmp, wifi_pw_tmp);
@@ -296,11 +285,6 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
                     printf("Too much header data %d\n", con_state->header_len);
                     return tcp_close_client_connection(con_state, pcb, ERR_CLSD);
                 }
-            } else {
-                // Send redirect
-                con_state->header_len = snprintf(con_state->headers, sizeof(con_state->headers), HTTP_RESPONSE_REDIRECT,
-                    ipaddr_ntoa(con_state->gw));
-                printf("Sending redirect %s", con_state->headers);
             }
 
             // Send the headers to the client
@@ -326,11 +310,6 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
     return ERR_OK;
 }
 
-static err_t tcp_server_poll(void *arg, struct tcp_pcb *pcb) {
-    TCP_CONNECT_STATE_T *con_state = (TCP_CONNECT_STATE_T*)arg;
-    printf("tcp_server_poll_fn\n");
-    return tcp_close_client_connection(con_state, pcb, ERR_OK); // Just disconnect clent?
-}
 
 static void tcp_server_err(void *arg, err_t err) {
     TCP_CONNECT_STATE_T *con_state = (TCP_CONNECT_STATE_T*)arg;
@@ -361,7 +340,6 @@ static err_t tcp_server_accept(void *arg, struct tcp_pcb *client_pcb, err_t err)
     tcp_arg(client_pcb, con_state);
     tcp_sent(client_pcb, tcp_server_sent);
     tcp_recv(client_pcb, tcp_server_recv);
-    tcp_poll(client_pcb, tcp_server_poll, POLL_TIME_S * 2);
     tcp_err(client_pcb, tcp_server_err);
 
     return ERR_OK;
@@ -401,7 +379,7 @@ static bool tcp_server_open(void *arg, const char *ap_name) {
 int main() {
 
     stdio_init_all();
-
+    
     sleep_ms(4000);
 
     eeprom.init();
@@ -436,19 +414,19 @@ int main() {
         return 1;
     }
 
-    state->complete = false;
-
     // button init
     gpio_init(BTN_GPIO);
     gpio_set_dir(BTN_GPIO, GPIO_IN);
 
-    // led init, green off, red on
-    gpio_init(LED_GREEN_GPIO);
-    gpio_init(LED_RED_GPIO);
-    gpio_set_dir(LED_GREEN_GPIO, GPIO_OUT);
-    gpio_set_dir(LED_RED_GPIO, GPIO_OUT);
-    gpio_put(LED_GREEN_GPIO, 0);
-    gpio_put(LED_RED_GPIO, 1);
+    // UART0 initialisieren (TX ist GP0, RX ist GP1)
+    uart_init(uart0, 115200);
+    gpio_set_function(0, GPIO_FUNC_UART); // TX
+    gpio_set_function(1, GPIO_FUNC_UART); // RX
+    uart_set_format(uart0, 8, 1, UART_PARITY_NONE);
+
+    printf("\n########\nPRINTBOT\n########\n\n");
+
+    state->complete = false;
 
     // init and copy default wifi credentials
     for(int i=0; i<WLAN_CRED_BUFFER_SIZE; i++){
@@ -462,22 +440,19 @@ int main() {
 
         while (true) {
             if (gpio_get(BTN_GPIO) == 1) {
+                    printf("AP button pressed\n");
+                    printf("Activate AP mode and delete saved credentials\n");
+                    clear_wlan_config_from_eeprom();
                     // client off, ap on
                     cyw43_arch_disable_sta_mode();
                     sleep_ms(50);
                     cyw43_arch_enable_ap_mode(WLAN_AP_SSID, WLAN_AP_PASSWORD, CYW43_AUTH_WPA2_AES_PSK);
-                    // led red on, green off
-                    gpio_put(LED_GREEN_GPIO, 0);
-                    gpio_put(LED_RED_GPIO, 1);
+                    printf("AP mode active\n");
             }
             if (wifi_is_saved)
             {
                 printf("Try to connect to saved wlan settings\n");
                 wifi_is_saved = false;
-
-                // all led on, for waiting
-                gpio_put(LED_GREEN_GPIO, 1);
-                gpio_put(LED_RED_GPIO, 1);
 
                 sleep_ms(500);
 
@@ -490,8 +465,7 @@ int main() {
                 if (cyw43_arch_wifi_connect_timeout_ms(wifi_ssid, wifi_password, CYW43_AUTH_WPA2_AES_PSK, 15000)) {
                     printf("connection to wifi not ok\n");
                     // connection to wifi not ok
-                    gpio_put(LED_GREEN_GPIO, 0);
-                    gpio_put(LED_RED_GPIO, 1);
+                    printf("activate AP mode\n");
                     // go again to ap mode
                     cyw43_arch_disable_sta_mode();
                     sleep_ms(500);
@@ -501,9 +475,9 @@ int main() {
                 else
                 {
                     printf("connection to wifi ok\n");
-                    // connection to wifi ok
-                    gpio_put(LED_GREEN_GPIO, 1);
-                    gpio_put(LED_RED_GPIO, 0);
+
+                    // Get and print IP address
+                    printf("IP Address: %s\n", ip4addr_ntoa(netif_ip4_addr(&cyw43_state.netif[CYW43_ITF_STA])));
 
                     // save to eeprom
                     save_wlan_config_to_eeprom();

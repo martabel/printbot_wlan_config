@@ -41,45 +41,25 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(picow_wlan_setup_background
+add_executable(picow_wlan_setup
         picow_wlan_setup.cpp
         dhcpserver/dhcpserver.c
         dnsserver/dnsserver.c
         )
 
-target_include_directories(picow_wlan_setup_background PRIVATE
+target_include_directories(picow_wlan_setup PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
         ${CMAKE_CURRENT_LIST_DIR}/.. # for our common lwipopts
         ${CMAKE_CURRENT_LIST_DIR}/dhcpserver
         ${CMAKE_CURRENT_LIST_DIR}/dnsserver
         )
 
-target_link_libraries(picow_wlan_setup_background
+target_link_libraries(picow_wlan_setup
         pico_cyw43_arch_lwip_threadsafe_background
         pico_stdlib
         m24c0x
         )
 
-pico_add_extra_outputs(picow_wlan_setup_background)
-pico_enable_stdio_usb(picow_wlan_setup_background 1)
-pico_enable_stdio_uart(picow_wlan_setup_background 0)
-
-add_executable(picow_wlan_setup_poll
-        picow_wlan_setup.cpp
-        dhcpserver/dhcpserver.c
-        dnsserver/dnsserver.c
-        )
-target_include_directories(picow_wlan_setup_poll PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}
-        ${CMAKE_CURRENT_LIST_DIR}/.. # for our common lwipopts
-        ${CMAKE_CURRENT_LIST_DIR}/dhcpserver
-        ${CMAKE_CURRENT_LIST_DIR}/dnsserver
-        )
-target_link_libraries(picow_wlan_setup_poll
-        pico_cyw43_arch_lwip_poll
-        pico_stdlib
-        m24c0x
-        )
-pico_add_extra_outputs(picow_wlan_setup_poll)
-pico_enable_stdio_usb(picow_wlan_setup_poll 1)
-pico_enable_stdio_uart(picow_wlan_setup_poll 0)
+pico_add_extra_outputs(picow_wlan_setup)
+pico_enable_stdio_usb(picow_wlan_setup 0)
+pico_enable_stdio_uart(picow_wlan_setup 1)
